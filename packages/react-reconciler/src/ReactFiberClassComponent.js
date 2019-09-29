@@ -503,6 +503,18 @@ function adoptClassInstance(workInProgress: Fiber, instance: any): void {
   }
 }
 
+let componentInstantiator = undefined;
+
+export function overrideComponentInstantiator(instantiator: (ctor: any, props: any, context: any) => any) {
+  componentInstantiator = instantiator;
+}
+
+function instantiateComponent(ctor: any, props: any, context: any): any {
+  return typeof componentInstantiator === 'function' ?
+      componentInstantiator(ctor, props, context) :
+      new ctor(props, context);
+}
+
 function constructClassInstance(
   workInProgress: Fiber,
   ctor: any,
@@ -576,11 +588,12 @@ function constructClassInstance(
       (debugRenderPhaseSideEffectsForStrictMode &&
         workInProgress.mode & StrictMode)
     ) {
-      new ctor(props, context); // eslint-disable-line no-new
+      instantiateComponent(ctor, props, context); // eslint-disable-line no-new
     }
   }
 
-  const instance = new ctor(props, context);
+  const instance = instantiateComponent(ctor, props, context);
+
   const state = (workInProgress.memoizedState =
     instance.state !== null && instance.state !== undefined
       ? instance.state

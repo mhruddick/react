@@ -35,6 +35,7 @@ import {
   getPublicRootInstance,
   findHostInstance,
   findHostInstanceWithWarning,
+  overrideComponentInstantiator,
 } from 'react-reconciler/inline.dom';
 import {createPortal as createPortalImpl} from 'shared/ReactPortal';
 import {canUseDOM} from 'shared/ExecutionEnvironment';
@@ -613,7 +614,7 @@ function createPortal(
 
 const ReactDOM: Object = {
   createPortal,
-
+  overrideComponentInstantiator,
   findDOMNode(
     componentOrElement: Element | ?React$Component<any, any>,
   ): null | Element | Text {

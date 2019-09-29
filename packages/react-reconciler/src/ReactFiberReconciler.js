@@ -64,6 +64,8 @@ import {
 } from './ReactCurrentFiber';
 import {StrictMode} from './ReactTypeOfMode';
 import {Sync} from './ReactFiberExpirationTime';
+import {overrideComponentInstantiator} from './ReactFiberClassComponent';
+export {overrideComponentInstantiator};
 
 type OpaqueRoot = FiberRoot;
 
