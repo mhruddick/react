@@ -8,6 +8,7 @@
  */
 
 import {createEventTarget} from 'react-interactions/events/src/dom/testing-library';
+import {emulateBrowserTab} from '../shared/emulateBrowserTab';
 
 let React;
 let ReactFeatureFlags;
@@ -45,8 +46,12 @@ describe('FocusTable', () => {
         TabbableScope,
       );
 
-      return ({onKeyboardOut, id, wrap}) => (
-        <FocusTable onKeyboardOut={onKeyboardOut} id={id} wrap={wrap}>
+      return ({onKeyboardOut, wrapX, wrapY, allowModifiers}) => (
+        <FocusTable
+          onKeyboardOut={onKeyboardOut}
+          wrapX={wrapX}
+          wrapY={wrapY}
+          allowModifiers={allowModifiers}>
           <table>
             <tbody>
               <FocusTableRow>
@@ -112,6 +117,20 @@ describe('FocusTable', () => {
       );
     }
 
+    it('handles keyboard arrow operations with allowModifiers', () => {
+      const Test = createFocusTableComponent();
+
+      ReactDOM.render(<Test allowModifiers={true} />, container);
+      const buttons = document.querySelectorAll('button');
+      const a1 = createEventTarget(buttons[0]);
+      a1.focus();
+      a1.keydown({
+        key: 'ArrowRight',
+        altKey: true,
+      });
+      expect(document.activeElement.textContent).toBe('A2');
+    });
+
     it('handles keyboard arrow operations', () => {
       const Test = createFocusTableComponent();
 
@@ -130,7 +149,7 @@ describe('FocusTable', () => {
       });
       expect(document.activeElement.textContent).toBe('B2');
 
-      const b2 = createEventTarget(document.activeElement);
+      let b2 = createEventTarget(document.activeElement);
       b2.keydown({
         key: 'ArrowLeft',
       });
@@ -151,52 +170,55 @@ describe('FocusTable', () => {
         key: 'ArrowUp',
       });
       expect(document.activeElement.textContent).toBe('B1');
+      // Should be a no-op due to modifier
+      b2 = createEventTarget(document.activeElement);
+      b2.keydown({
+        key: 'ArrowUp',
+        altKey: true,
+      });
+      b2 = createEventTarget(document.activeElement);
+      expect(document.activeElement.textContent).toBe('B1');
     });
 
-    it('handles keyboard arrow operations between tables', () => {
+    it('handles keyboard arrow operations between nested tables', () => {
       const leftSidebarRef = React.createRef();
-      const FocusTable = createFocusTableComponent();
+      const [
+        MainFocusTable,
+        MainFocusTableRow,
+        MainFocusTableCell,
+      ] = createFocusTable(TabbableScope);
+      const SubFocusTable = createFocusTableComponent();
+      const onKeyboardOut = jest.fn((direction, event) =>
+        event.continuePropagation(),
+      );
 
       function Test() {
         return (
-          <div>
-            <h1>Title</h1>
-            <aside ref={leftSidebarRef}>
-              <h2>Left Sidebar</h2>
-              <FocusTable
-                id="left-sidebar"
-                onKeyboardOut={(direction, focusTableByID) => {
-                  if (direction === 'right') {
-                    focusTableByID('content');
-                  }
-                }}
-              />
-            </aside>
-            <section>
-              <h2>Content</h2>
-              <FocusTable
-                id="content"
-                onKeyboardOut={(direction, focusTableByID) => {
-                  if (direction === 'right') {
-                    focusTableByID('right-sidebar');
-                  } else if (direction === 'left') {
-                    focusTableByID('left-sidebar');
-                  }
-                }}
-              />
-            </section>
-            <aside>
-              <h2>Right Sidebar</h2>
-              <FocusTable
-                id="right-sidebar"
-                onKeyboardOut={(direction, focusTableByID) => {
-                  if (direction === 'left') {
-                    focusTableByID('content');
-                  }
-                }}
-              />
-            </aside>
-          </div>
+          <MainFocusTable>
+            <MainFocusTableRow>
+              <div>
+                <h1>Title</h1>
+                <aside ref={leftSidebarRef}>
+                  <h2>Left Sidebar</h2>
+                  <MainFocusTableCell>
+                    <SubFocusTable onKeyboardOut={onKeyboardOut} />
+                  </MainFocusTableCell>
+                </aside>
+                <section>
+                  <h2>Content</h2>
+                  <MainFocusTableCell>
+                    <SubFocusTable onKeyboardOut={onKeyboardOut} />
+                  </MainFocusTableCell>
+                </section>
+                <aside>
+                  <h2>Right Sidebar</h2>
+                  <MainFocusTableCell>
+                    <SubFocusTable onKeyboardOut={onKeyboardOut} />
+                  </MainFocusTableCell>
+                </aside>
+              </div>
+            </MainFocusTableRow>
+          </MainFocusTable>
         );
       }
 
@@ -219,6 +241,7 @@ describe('FocusTable', () => {
       a3.keydown({
         key: 'ArrowRight',
       });
+      expect(onKeyboardOut).toHaveBeenCalledTimes(1);
       expect(document.activeElement.textContent).toBe('A1');
 
       a1 = createEventTarget(document.activeElement);
@@ -237,6 +260,7 @@ describe('FocusTable', () => {
       a3.keydown({
         key: 'ArrowRight',
       });
+      expect(onKeyboardOut).toHaveBeenCalledTimes(2);
       expect(document.activeElement.textContent).toBe('A1');
 
       a1 = createEventTarget(document.activeElement);
@@ -327,10 +351,10 @@ describe('FocusTable', () => {
       expect(document.activeElement.placeholder).toBe('B1');
     });
 
-    it('handles keyboard arrow operations with wrapping enabled', () => {
+    it('handles keyboard arrow operations with X wrapping enabled', () => {
       const Test = createFocusTableComponent();
 
-      ReactDOM.render(<Test wrap={true} />, container);
+      ReactDOM.render(<Test wrapX={true} />, container);
       const buttons = document.querySelectorAll('button');
       let a1 = createEventTarget(buttons[0]);
       a1.focus();
@@ -356,6 +380,188 @@ describe('FocusTable', () => {
         key: 'ArrowLeft',
       });
       expect(document.activeElement.textContent).toBe('A3');
+    });
+
+    it('handles keyboard arrow operations with Y wrapping enabled', () => {
+      const Test = createFocusTableComponent();
+
+      ReactDOM.render(<Test wrapY={true} />, container);
+      const buttons = document.querySelectorAll('button');
+      let a1 = createEventTarget(buttons[0]);
+      a1.focus();
+      a1.keydown({
+        key: 'ArrowDown',
+      });
+      expect(document.activeElement.textContent).toBe('B1');
+
+      const a2 = createEventTarget(document.activeElement);
+      a2.keydown({
+        key: 'ArrowDown',
+      });
+      expect(document.activeElement.textContent).toBe('C1');
+
+      const a3 = createEventTarget(document.activeElement);
+      a3.keydown({
+        key: 'ArrowDown',
+      });
+      expect(document.activeElement.textContent).toBe('A1');
+
+      a1 = createEventTarget(document.activeElement);
+      a1.keydown({
+        key: 'ArrowUp',
+      });
+      expect(document.activeElement.textContent).toBe('C1');
+    });
+
+    it('handles keyboard arrow operations mixed with tabbing', () => {
+      const [FocusTable, FocusRow, FocusCell] = createFocusTable(TabbableScope);
+      const beforeRef = React.createRef();
+      const afterRef = React.createRef();
+
+      function Test() {
+        return (
+          <>
+            <input placeholder="Before" ref={beforeRef} />
+            <FocusTable tabScope={TabbableScope}>
+              <div>
+                <FocusRow>
+                  <FocusCell>
+                    <input placeholder="A1" />
+                  </FocusCell>
+                  <FocusCell>
+                    <input placeholder="B1" />
+                  </FocusCell>
+                  <FocusCell>
+                    <input placeholder="C1" />
+                  </FocusCell>
+                </FocusRow>
+              </div>
+              <div>
+                <FocusRow>
+                  <FocusCell>
+                    <input placeholder="A2" />
+                  </FocusCell>
+                  <FocusCell>
+                    <input placeholder="B2" />
+                  </FocusCell>
+                  <FocusCell>
+                    <input placeholder="C1" />
+                  </FocusCell>
+                </FocusRow>
+              </div>
+            </FocusTable>
+            <input placeholder="After" ref={afterRef} />
+          </>
+        );
+      }
+
+      ReactDOM.render(<Test />, container);
+      beforeRef.current.focus();
+
+      expect(document.activeElement.placeholder).toBe('Before');
+      emulateBrowserTab();
+      expect(document.activeElement.placeholder).toBe('A1');
+      emulateBrowserTab();
+      expect(document.activeElement.placeholder).toBe('After');
+      emulateBrowserTab(true);
+      expect(document.activeElement.placeholder).toBe('A1');
+      const a1 = createEventTarget(document.activeElement);
+      a1.keydown({
+        key: 'ArrowRight',
+      });
+      expect(document.activeElement.placeholder).toBe('B1');
+      emulateBrowserTab();
+      expect(document.activeElement.placeholder).toBe('After');
+      emulateBrowserTab(true);
+      expect(document.activeElement.placeholder).toBe('B1');
+    });
+
+    it('handles keyboard arrow operations with colSpan', () => {
+      const firstRef = React.createRef();
+      const [FocusTable, FocusRow, FocusCell] = createFocusTable(TabbableScope);
+
+      function Test() {
+        return (
+          <>
+            <FocusTable tabScope={TabbableScope}>
+              <div>
+                <FocusRow>
+                  <FocusCell>
+                    <input placeholder="A1" ref={firstRef} />
+                  </FocusCell>
+                  <FocusCell colSpan={2}>
+                    <input placeholder="B1" />
+                  </FocusCell>
+                  <FocusCell>
+                    <input placeholder="C1" />
+                  </FocusCell>
+                </FocusRow>
+              </div>
+              <div>
+                <FocusRow>
+                  <FocusCell>
+                    <input placeholder="A2" />
+                  </FocusCell>
+                  <FocusCell>
+                    <input placeholder="B2" />
+                  </FocusCell>
+                  <FocusCell>
+                    <input placeholder="C2" />
+                  </FocusCell>
+                  <FocusCell>
+                    <input placeholder="D2" />
+                  </FocusCell>
+                </FocusRow>
+              </div>
+            </FocusTable>
+          </>
+        );
+      }
+
+      ReactDOM.render(<Test />, container);
+      firstRef.current.focus();
+
+      expect(document.activeElement.placeholder).toBe('A1');
+      const a1 = createEventTarget(document.activeElement);
+      a1.keydown({
+        key: 'ArrowRight',
+      });
+      expect(document.activeElement.placeholder).toBe('B1');
+      let b1 = createEventTarget(document.activeElement);
+      b1.keydown({
+        key: 'ArrowRight',
+      });
+      expect(document.activeElement.placeholder).toBe('C1');
+      let c1 = createEventTarget(document.activeElement);
+      c1.keydown({
+        key: 'ArrowDown',
+      });
+      expect(document.activeElement.placeholder).toBe('D2');
+      let d2 = createEventTarget(document.activeElement);
+      d2.keydown({
+        key: 'ArrowUp',
+      });
+      expect(document.activeElement.placeholder).toBe('C1');
+      c1 = createEventTarget(document.activeElement);
+      c1.keydown({
+        key: 'ArrowLeft',
+      });
+      expect(document.activeElement.placeholder).toBe('B1');
+      b1 = createEventTarget(document.activeElement);
+      b1.keydown({
+        key: 'ArrowDown',
+      });
+      expect(document.activeElement.placeholder).toBe('B2');
+      const b2 = createEventTarget(document.activeElement);
+      b2.keydown({
+        key: 'ArrowRight',
+      });
+      expect(document.activeElement.placeholder).toBe('C2');
+      const c2 = createEventTarget(document.activeElement);
+      c2.keydown({
+        key: 'ArrowUp',
+      });
+      expect(document.activeElement.placeholder).toBe('B1');
     });
   });
 });
